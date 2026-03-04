@@ -2,20 +2,85 @@ package ru.fastdelivery.domain.delivery.shipment;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import ru.fastdelivery.domain.common.coordinates.Point;
 import ru.fastdelivery.domain.common.currency.CurrencyFactory;
 import ru.fastdelivery.domain.common.length.Length;
 import ru.fastdelivery.domain.common.weight.Weight;
 import ru.fastdelivery.domain.delivery.pack.OuterDimensions;
 import ru.fastdelivery.domain.delivery.pack.Pack;
+import ru.fastdelivery.domain.delivery.route.Route;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ShipmentTest {
 
     private final CurrencyFactory currencyFactory = new CurrencyFactory(code -> true);
+
+    @Test
+    @DisplayName("Создание отправления без маршрута -> успешно")
+    void whenCreateWithoutRoute_thenSuccess() {
+        var weight = new Weight(BigInteger.TEN);
+        var packages = List.of(new Pack(weight));
+
+        var shipment = new Shipment(packages, currencyFactory.create("RUB"));
+
+        assertThat(shipment.packages()).hasSize(1);
+        assertThat(shipment.currency()).isNotNull();
+        assertThat(shipment.route()).isNull();
+    }
+
+    @Test
+    @DisplayName("Создание отправления с маршрутом -> успешно")
+    void whenCreateWithRoute_thenSuccess() {
+        var weight = new Weight(BigInteger.TEN);
+        var packages = List.of(new Pack(weight));
+
+        Point departure = new Point(
+                BigDecimal.valueOf(55.446008),
+                BigDecimal.valueOf(65.339151)
+        );
+        Point destination = new Point(
+                BigDecimal.valueOf(73.398660),
+                BigDecimal.valueOf(55.027532)
+        );
+        Route route = new Route(departure, destination);
+
+        var shipment = new Shipment(
+                packages,
+                currencyFactory.create("RUB"),
+                route
+        );
+
+        assertThat(shipment.packages()).hasSize(1);
+        assertThat(shipment.currency()).isNotNull();
+        assertThat(shipment.route()).isEqualTo(route);
+    }
+
+    @Test
+    @DisplayName("Пустой список упаковок -> исключение")
+    void whenEmptyPackages_thenException() {
+        List<Pack> emptyList = List.of();
+
+        assertThatThrownBy(() -> new Shipment(emptyList, currencyFactory.create("RUB")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Packages must not be null or empty");
+    }
+
+    @Test
+    @DisplayName("null валюта -> исключение")
+    void whenNullCurrency_thenException() {
+        var weight = new Weight(BigInteger.TEN);
+        var packages = List.of(new Pack(weight));
+
+        assertThatThrownBy(() -> new Shipment(packages, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Currency must not be null");
+    }
 
     @Test
     @DisplayName("Суммарный вес всех упаковок -> успешно")
@@ -52,12 +117,10 @@ class ShipmentTest {
 
         var weight = new Weight(BigInteger.TEN);
         var pack = new Pack(weight, dimensions);
-        var packages = List.of(pack, pack); // две одинаковые упаковки
+        var packages = List.of(pack, pack);
 
         var shipment = new Shipment(packages, currencyFactory.create("RUB"));
 
-        // Объем одной упаковки: 0.0525 м³
-        // Двух: 0.1050 м³
         assertThat(shipment.volumeAllPackages()).isEqualByComparingTo("0.1050");
     }
 
@@ -75,7 +138,6 @@ class ShipmentTest {
 
         var shipment = new Shipment(packages, currencyFactory.create("RUB"));
 
-        // Объем только одной упаковки с габаритами: 0.0525 м³
         assertThat(shipment.volumeAllPackages()).isEqualByComparingTo("0.0525");
     }
 }

@@ -9,3 +9,11 @@ cost:
       # Стоимость доставки за один кубический метр груза
       # Значение можно изменить без перекомпиляции кода
       perCubicMeter: 5000
+
+coordinates:
+  latitude:
+    min: 45
+    max: 65
+  longitude:
+    min: 30
+    max: 96

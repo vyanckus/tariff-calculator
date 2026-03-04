@@ -5,6 +5,8 @@ import ru.fastdelivery.domain.common.price.Price;
 import ru.fastdelivery.domain.delivery.shipment.Shipment;
 
 import javax.inject.Named;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Named
 @RequiredArgsConstructor
@@ -14,21 +16,32 @@ public class TariffCalculateUseCase {
     private final VolumePriceProvider volumePriceProvider;
 
     public Price calc(Shipment shipment) {
-        var totalWeightKg = shipment.weightAllPackages().kilograms();
-        var costByWeight = weightPriceProvider
+        BigDecimal totalWeightKg = shipment.weightAllPackages().kilograms();
+        Price costByWeight = weightPriceProvider
                 .costPerKg()
                 .multiply(totalWeightKg);
 
-        var totalVolumeM3 = shipment.volumeAllPackages();
-        var costByVolume = volumePriceProvider
+        BigDecimal totalVolumeM3 = shipment.volumeAllPackages();
+        Price costByVolume = volumePriceProvider
                 .costPerCubicMeter()
                 .multiply(totalVolumeM3);
 
-        var minimalPrice = weightPriceProvider.minimalPrice();
+        Price baseCost = costByWeight.max(costByVolume);
+        Price minimalPrice = weightPriceProvider.minimalPrice();
 
-        return costByWeight
-                .max(costByVolume)
-                .max(minimalPrice);
+        if (shipment.route() != null) {
+            BigDecimal distanceFactor = shipment.route().distanceFactor();
+
+            BigDecimal baseAmount = baseCost.amount();
+            BigDecimal newAmount = baseAmount.multiply(distanceFactor);
+            newAmount = newAmount.setScale(2, RoundingMode.CEILING);
+
+            Price costWithDistance = new Price(newAmount, baseCost.currency());
+
+            return costWithDistance.max(minimalPrice);
+        }
+
+        return baseCost.max(minimalPrice);
     }
 
     public Price minimalPrice() {

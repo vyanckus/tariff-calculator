@@ -10,28 +10,32 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import ru.fastdelivery.domain.common.coordinates.Point;
+import ru.fastdelivery.domain.common.coordinates.PointFactory;
 import ru.fastdelivery.domain.common.currency.CurrencyFactory;
 import ru.fastdelivery.domain.common.length.Length;
+import ru.fastdelivery.domain.common.price.Price;
 import ru.fastdelivery.domain.common.weight.Weight;
 import ru.fastdelivery.domain.delivery.pack.OuterDimensions;
 import ru.fastdelivery.domain.delivery.pack.Pack;
+import ru.fastdelivery.domain.delivery.route.Route;
 import ru.fastdelivery.domain.delivery.shipment.Shipment;
 import ru.fastdelivery.presentation.api.request.CalculatePackagesRequest;
 import ru.fastdelivery.presentation.api.request.CargoPackage;
 import ru.fastdelivery.presentation.api.response.CalculatePackagesResponse;
 import ru.fastdelivery.usecase.TariffCalculateUseCase;
 
-import java.math.BigInteger;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/calculate/")
+@RequestMapping("/api/v1/calculate")
 @RequiredArgsConstructor
 @Tag(name = "Расчеты стоимости доставки")
 public class CalculateController {
 
     private final TariffCalculateUseCase tariffCalculateUseCase;
     private final CurrencyFactory currencyFactory;
+    private final PointFactory pointFactory;
 
     @PostMapping
     @Operation(summary = "Расчет стоимости по упаковкам груза")
@@ -46,9 +50,24 @@ public class CalculateController {
                 .map(this::toPack)
                 .toList();
 
-        var shipment = new Shipment(packs, currencyFactory.create(request.currencyCode()));
-        var calculatedPrice = tariffCalculateUseCase.calc(shipment);
-        var minimalPrice = tariffCalculateUseCase.minimalPrice();
+        Shipment shipment;
+        if (request.departure() != null && request.destination() != null) {
+            Point departure = pointFactory.create(
+                    request.departure().latitude(),
+                    request.departure().longitude()
+            );
+            Point destination = pointFactory.create(
+                    request.destination().latitude(),
+                    request.destination().longitude()
+            );
+            Route route = new Route(departure, destination);
+            shipment = new Shipment(packs, currencyFactory.create(request.currencyCode()), route);
+        } else {
+            shipment = new Shipment(packs, currencyFactory.create(request.currencyCode()));
+        }
+
+        Price calculatedPrice = tariffCalculateUseCase.calc(shipment);
+        Price minimalPrice = tariffCalculateUseCase.minimalPrice();
 
         return new CalculatePackagesResponse(calculatedPrice, minimalPrice);
     }
